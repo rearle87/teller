@@ -12,6 +12,7 @@ defmodule TellerWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug TellerWeb.Plugs.APIAuth
   end
 
   scope "/", TellerWeb do
@@ -21,9 +22,27 @@ defmodule TellerWeb.Router do
   end
 
   # Other scopes may use custom stacks.
-  # scope "/api", TellerWeb do
-  #   pipe_through :api
-  # end
+  scope "/api", TellerWeb do
+    pipe_through :api
+
+    # Tokens
+    post("/request_token", APITokenController, :new)
+
+    # Accounts
+    resources("/accounts", AccountController, except: [:new, :edit])
+    get("accounts/:account_id", AccountController, :show)
+    get("accounts/:account_id/details", AccountController, :show_details)
+    get("accounts/:account_id/balance", AccountController, :show_balance)
+
+    # Account Transactions
+    get("accounts/:account_id/transactions", TransactionController, :show_for_account)
+
+    get(
+      "accounts/:account_id/transactions/:transaction_id",
+      TransactionController,
+      :show
+    )
+  end
 
   # Enables LiveDashboard only for development
   #
