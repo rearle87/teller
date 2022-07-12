@@ -12,7 +12,7 @@ defmodule TellerWeb.AccountController do
   def show(conn, %{"id" => id}) do
     # account = Accounts.get_account!(id)
     # render(conn, "show.html", account: account)
-    IO.inspect(conn)
+
     json(conn, %{assigns: conn.assigns})
   end
 end
