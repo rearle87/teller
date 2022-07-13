@@ -30,6 +30,8 @@ defmodule Teller.Accounts.Account do
           subtype: String.t()
         }
 
+  alias Teller.Accounts.Variance
+
   def account_names do
     [
       "My Checking",
@@ -49,6 +51,11 @@ defmodule Teller.Accounts.Account do
 
   def account_subtypes do
     ["checking", "savings", "money_market", "certificate_of_deposit", "treasury", "sweep"]
+  end
+
+  def generate_for_all(timestamp) do
+    account_names()
+    |> Enum.map(fn name -> generate(name, timestamp) end)
   end
 
   def generate(account_name, timestamp) do
@@ -75,21 +82,29 @@ defmodule Teller.Accounts.Account do
   def type_and_subtype(account_name, timestamp) do
     {ms, _} = timestamp.microsecond
 
+    account_name_number =
+      Variance.number_from_account_name(account_name, word_op: :add, comb_op: :add)
+
     num =
-      (ms * account_name_sum(account_name, operation: :multiplication))
+      (ms + account_name_number + String.length(account_name))
       |> IO.inspect()
+      |> Integer.digits()
+      |> List.last()
 
     cond do
-      rem(num, 1000) == 0 ->
+      account_name == "My Checking" ->
+        {"depository", "checking"}
+
+      rem(num, 25) == 0 ->
         {"depository", "sweep"}
 
-      rem(num, 250) == 0 ->
+      rem(num, 10) == 0 ->
         {"depository", "treasury"}
 
-      rem(num, 10) == 0 ->
+      rem(num, 8) == 0 ->
         {"depository", "certificate_of_deposit"}
 
-      rem(num, 5) == 0 ->
+      rem(num, 4) == 0 ->
         {"depository", "money_market"}
 
       rem(num, 3) == 0 ->
@@ -107,7 +122,7 @@ defmodule Teller.Accounts.Account do
     {ms, _} = timestamp.microsecond
 
     {digits, _} =
-      (ms * account_name_sum(account_name))
+      (ms * Variance.number_from_account_name(account_name, word_op: :add, comb_op: :add))
       |> Integer.digits()
       |> Enum.split(4)
 
@@ -116,7 +131,11 @@ defmodule Teller.Accounts.Account do
 
   def ids(account_name, timestamp) do
     iso = DateTime.to_iso8601(timestamp)
-    name_string = account_name_sum(account_name, operation: :addition) |> Integer.to_string()
+
+    name_string =
+      Variance.number_from_account_name(account_name, word_op: :add, comb_op: :add)
+      |> Integer.to_string()
+
     seed = iso <> name_string
 
     account_id = UUID.uuid5(:dns, seed, :slug)
@@ -130,66 +149,11 @@ defmodule Teller.Accounts.Account do
     {ms, _} = timestamp.microsecond
 
     # Get sum of alphabet letters from account name
-    IO.inspect(account_name_sum(account_name))
-    name = choose_from_list(ms, account_name_sum(account_name), institutions())
+    account_name_number =
+      Variance.number_from_account_name(account_name, word_op: :add, comb_op: :add)
+
+    name = Variance.choose_from_list(ms, account_name_number, institutions(), op: :add)
 
     %{id: String.downcase(name), name: name}
-  end
-
-  def account_name_sum(account_name, opts \\ []) do
-    first_name_list =
-      account_name
-      |> String.upcase()
-      |> String.split(" ", trim: true)
-      |> List.first()
-      |> String.replace([" ", ".", "-"], "")
-      |> String.split("", trim: true)
-
-    name_list =
-      account_name
-      |> String.upcase()
-      |> String.replace([" ", ".", "-"], "")
-      |> String.split("", trim: true)
-
-    first_name_sum =
-      first_name_list
-      |> Enum.map(fn letter -> get_alphabet_number(letter) end)
-      |> Enum.sum()
-
-    name_sum =
-      name_list
-      |> Enum.map(fn letter -> get_alphabet_number(letter) end)
-      |> Enum.sum()
-
-    case Keyword.get(opts, :operation) do
-      :addition -> first_name_sum + name_sum
-      :multiplication -> first_name_sum * name_sum
-      :division -> first_name_sum / name_sum
-      _ -> first_name_sum + name_sum
-    end
-  end
-
-  def get_alphabet_number(letter) do
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    |> String.split("", trim: true)
-    |> Enum.find_index(fn alph_letter -> alph_letter == letter end)
-    |> Kernel.+(1)
-  end
-
-  # Generic function that takes any two numbers and
-  # combines them to choose an item from a list of choices
-  defp choose_from_list(num_1, num_2, list, opts \\ []) do
-    rem_1 = rem(num_1, length(list)) - 1
-
-    new_number =
-      case Keyword.get(opts, :operation) do
-        :addition -> rem_1 + num_2
-        :multiplication -> rem_1 * num_2
-        :division -> rem_1 / num_2
-        _ -> rem_1 + num_2
-      end
-
-    list_index = rem(new_number, length(list)) - 1
-    Enum.at(list, list_index)
   end
 end
