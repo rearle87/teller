@@ -156,4 +156,12 @@ defmodule Teller.Accounts.Account do
 
     %{id: String.downcase(name), name: name}
   end
+
+  def get_name_from_id(account_id, timestamp) do
+    account_names
+    |> Enum.find(fn name ->
+      {id, _} = ids(name, timestamp)
+      account_id == id
+    end)
+  end
 end
