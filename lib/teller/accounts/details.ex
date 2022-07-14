@@ -34,7 +34,11 @@ defmodule Teller.Accounts.Details do
     }
   end
 
-  def account_and_routing(seed) do
+  # ========================================
+  #  ---------- PRIVATE FUNCTIONS ----------
+  # ========================================
+
+  defp account_and_routing(seed) do
     # Take the account_id seed and split it into 3 smaller numbers
     {account_seed, ach_and_wire_seed} = Variance.split_seed(seed, 11)
     {ach_seed, wire_seed} = Variance.split_seed(ach_and_wire_seed, 9)

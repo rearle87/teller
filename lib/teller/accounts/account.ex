@@ -32,32 +32,6 @@ defmodule Teller.Accounts.Account do
 
   alias Teller.Accounts.Variance
 
-  def account_names do
-    [
-      "My Checking",
-      "Jimmy Carter",
-      "Ronald Reagan",
-      "George H. W. Bush",
-      "Bill Clinton",
-      "George W. Bush",
-      "Barack Obama",
-      "Donald Trump"
-    ]
-  end
-
-  def institutions do
-    ["Chase", "Bank of America", "Wells Fargo", "Citibank", "Capital One"]
-  end
-
-  def account_subtypes do
-    ["checking", "savings", "money_market", "certificate_of_deposit", "treasury", "sweep"]
-  end
-
-  def generate_for_all(timestamp) do
-    account_names()
-    |> Enum.map(fn name -> generate(name, timestamp) end)
-  end
-
   def generate(account_name, timestamp) do
     {account_id, enrollment_id} = ids(account_name, timestamp)
     seed = Variance.id_to_number(account_id)
@@ -80,7 +54,35 @@ defmodule Teller.Accounts.Account do
     }
   end
 
-  def ids(account_name, timestamp) do
+  def generate_all(timestamp) do
+    names = [
+      "My Checking",
+      "Jimmy Carter",
+      "Ronald Reagan",
+      "George H. W. Bush",
+      "Bill Clinton",
+      "George W. Bush",
+      "Barack Obama",
+      "Donald Trump"
+    ]
+
+    Enum.map(names, fn name -> generate(name, timestamp) end)
+  end
+
+  def starting_balance(account_id) do
+    {balance, _} =
+      account_id
+      |> Variance.id_to_number()
+      |> Variance.split_seed(7)
+
+    Float.round(balance / 100, 2)
+  end
+
+  # ========================================
+  #  ---------- PRIVATE FUNCTIONS ----------
+  # ========================================
+
+  defp ids(account_name, timestamp) do
     string = account_name <> DateTime.to_iso8601(timestamp)
 
     account_id = UUID.uuid5(:dns, string, :slug)
@@ -89,7 +91,7 @@ defmodule Teller.Accounts.Account do
     {"acc_" <> account_id, "enr_" <> enrollment_id}
   end
 
-  def type_and_subtype(seed, account_name) do
+  defp type_and_subtype(seed, account_name) do
     {num, _} = Variance.split_seed(seed, 6)
 
     # Determine the type of account. For verisimilitude's sake:
@@ -125,7 +127,7 @@ defmodule Teller.Accounts.Account do
     end
   end
 
-  def last_four(seed) do
+  defp last_four(seed) do
     {_, num} = Variance.split_seed(seed, 6)
 
     {digits, _} =
@@ -136,27 +138,11 @@ defmodule Teller.Accounts.Account do
     Integer.undigits(digits)
   end
 
-  def institution(seed) do
+  defp institution(seed) do
+    institutions = ["Chase", "Bank of America", "Wells Fargo", "Citibank", "Capital One"]
     {num_1, num_2} = Variance.split_seed(seed, 2)
-    name = Variance.choose_from_list(num_1, num_2, institutions(), op: :add)
+    name = Variance.choose_from_list(num_1, num_2, institutions, op: :add)
 
     %{id: String.downcase(name), name: name}
-  end
-
-  def get_name_from_id(account_id, timestamp) do
-    account_names()
-    |> Enum.find(fn name ->
-      {id, _} = ids(name, timestamp)
-      account_id == id
-    end)
-  end
-
-  def starting_balance(account_id) do
-    {balance, _} =
-      account_id
-      |> Variance.id_to_number()
-      |> Variance.split_seed(7)
-
-    Float.round(balance / 100, 2)
   end
 end
