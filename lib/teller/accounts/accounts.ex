@@ -93,14 +93,14 @@ defmodule Teller.Accounts do
       [%Transaction{}, ...]
 
   """
-  def list_transactions(account_id, timestamp) do
+  def list_transactions(account_id, timestamp, opts \\ []) do
     # Generate a list of dates 90 days in the past from the day the timestamp was created
     start_date = DateTime.to_date(timestamp) |> Date.add(-90)
     end_date = Date.utc_today()
     range = Date.range(start_date, end_date)
 
     # Create the transactions
-    Transaction.generate_for_range(account_id, range)
+    Transaction.generate_for_range(account_id, range, opts)
   end
 
   @doc """

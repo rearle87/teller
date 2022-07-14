@@ -62,10 +62,11 @@ defmodule Teller.Accounts.Transaction do
     }
   end
 
-  def generate_for_range(account_id, range) do
-    # Generate transactions
+  def generate_for_range(account_id, range, opts \\ []) do
     {transactions, _} =
       range
+
+      # Generate transactions
       |> Enum.flat_map(fn date ->
         transaction_count = count_for_day(account_id, date)
         list = if transaction_count == 0, do: [], else: Enum.to_list(1..transaction_count)
@@ -88,13 +89,17 @@ defmodule Teller.Accounts.Transaction do
         {Map.put(transaction, :running_balance, acc), acc}
       end)
 
-    # Return the list!
-    transactions
+    # Pagination Controls
+    from_id = Keyword.get(opts, :from_id)
+    transactions = if from_id, do: start_list_at(transactions, from_id), else: transactions
+
+    count = Keyword.get(opts, :count)
+    if count, do: paginate(transactions, count), else: transactions
   end
 
-  # ========================================
-  #  ---------- PRIVATE FUNCTIONS ----------
-  # ========================================
+  # =============================================================
+  #  ---------- PRIVATE FUNCTIONS - SINGLE TRANSACTION ----------
+  # =============================================================
 
   defp id(account_id, date, transaction_number) do
     string =
@@ -242,5 +247,29 @@ defmodule Teller.Accounts.Transaction do
          type: "organization"
        }
      }}
+  end
+
+  # ===========================================================
+  #  ---------- PRIVATE FUNCTIONS - TRANSACTION LIST ----------
+  # ===========================================================
+
+  def start_list_at(transactions, from_id) do
+    starting_index =
+      Enum.find_index(transactions, fn transaction ->
+        transaction.id == from_id
+      end)
+
+    # Split the list, and ensure that the first result is
+    # the transaction BEFORE the one requested
+    split_index = if starting_index == 0, do: 0, else: starting_index - 1
+    {_, new_transactions} = Enum.split(transactions, split_index)
+
+    new_transactions
+  end
+
+  def paginate(transactions, count) do
+    {transactions, _} = Enum.split(transactions, count)
+    Enum.split(transactions, count) |> IO.inspect()
+    transactions
   end
 end

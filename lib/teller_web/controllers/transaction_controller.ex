@@ -4,7 +4,14 @@ defmodule TellerWeb.TransactionController do
   alias Teller.Accounts
 
   def show_for_account(conn, %{"account_id" => account_id}) do
-    transactions = Accounts.list_transactions(account_id, conn.assigns.token_timestamp)
+    # Get query params
+    from_id = Map.get(conn.query_params, "from_id")
+    count = Map.get(conn.query_params, "count")
+
+    opts = if from_id, do: [from_id: from_id], else: []
+    opts = if count, do: opts ++ [count: String.to_integer(count)], else: opts
+
+    transactions = Accounts.list_transactions(account_id, conn.assigns.token_timestamp, opts)
 
     conn
     |> put_status(:accepted)
