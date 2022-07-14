@@ -1,4 +1,5 @@
 defmodule Teller.Accounts.Details do
+  @derive Jason.Encoder
   defstruct account_id: nil,
             account_number: nil,
             links: [],

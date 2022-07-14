@@ -1,4 +1,5 @@
 defmodule Teller.Accounts.Account do
+  @derive Jason.Encoder
   @enforce_keys [:id, :enrollment_id, :institution, :last_four]
   defstruct id: nil,
             enrollment_id: nil,
@@ -83,6 +84,7 @@ defmodule Teller.Accounts.Account do
   # ========================================
 
   defp ids(account_name, timestamp) do
+    IO.inspect(timestamp)
     string = account_name <> DateTime.to_iso8601(timestamp)
 
     account_id = UUID.uuid5(:dns, string, :slug)

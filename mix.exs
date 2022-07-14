@@ -46,7 +46,8 @@ defmodule Teller.MixProject do
       {:gettext, "~> 0.18"},
       {:jason, "~> 1.2"},
       {:plug_cowboy, "~> 2.5"},
-      {:elixir_uuid, "~> 1.2"}
+      {:elixir_uuid, "~> 1.2"},
+      {:nanoid, "~> 2.0.5"}
     ]
   end
 

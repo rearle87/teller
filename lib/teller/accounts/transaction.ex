@@ -1,4 +1,5 @@
 defmodule Teller.Accounts.Transaction do
+  @derive Jason.Encoder
   defstruct account_id: nil,
             amount: nil,
             date: nil,

@@ -19,7 +19,7 @@ defmodule Teller.Accounts do
 
   """
   def list_accounts(timestamp) do
-    Account.generate_all(timestamp)
+    {:ok, Account.generate_all(timestamp)}
   end
 
   @doc """

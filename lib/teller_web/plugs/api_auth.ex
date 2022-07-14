@@ -36,8 +36,9 @@ defmodule TellerWeb.Plugs.APIAuth do
         token = String.split(token, "test_") |> List.last()
 
         case Phoenix.Token.decrypt(TellerWeb.Endpoint, "accounts", token) do
-          {:ok, token_datetime} ->
-            assign(conn, :token_datetime, token_datetime)
+          {:ok, timestamp} ->
+            {:ok, timestamp, _} = DateTime.from_iso8601(timestamp)
+            assign(conn, :token_timestamp, timestamp)
 
           {:error, _} ->
             conn |> resp(401, "Invalid authorization token") |> send_resp() |> halt()
@@ -53,6 +54,10 @@ defmodule TellerWeb.Plugs.APIAuth do
         |> halt()
     end
   end
+
+  # ========================================
+  #  ---------- PRIVATE FUNCTIONS ----------
+  # ========================================
 
   defp extract_token(auth) do
     auth

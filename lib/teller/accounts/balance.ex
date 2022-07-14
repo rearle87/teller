@@ -1,4 +1,5 @@
 defmodule Teller.Accounts.Balance do
+  @derive Jason.Encoder
   defstruct account_id: nil, available: nil, ledger: nil, links: []
 
   @type t :: %__MODULE__{
