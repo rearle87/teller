@@ -113,124 +113,110 @@ defmodule Teller.Accounts.Transaction do
     ]
   end
 
-  def generate(account_id, timestamp, date, transaction_number) do
-    account_name = Account.get_name_from_id(account_id, timestamp)
-
-    {description, details} =
-      description_and_details(account_name, timestamp, date, transaction_number)
-
+  def generate(account_id, date, transaction_number) do
+    # Get transaction_id & seed from that id
     id = id(account_id, date, transaction_number)
-    status = if Date.diff(Date.utc_today(), date) < 2, do: "pending", else: "posted"
+    seed = Variance.id_to_number(id)
 
-    Date.diff(date, Date.utc_today())
+    # Build the struct
+    # Note: transactions in the last two days are "pending".
+    status = if Date.diff(Date.utc_today(), date) < 2, do: "pending", else: "posted"
+    {description, details} = description_and_details(seed, transaction_number)
 
     %__MODULE__{
       account_id: account_id,
       id: id,
-      amount: amount(account_name, timestamp, date, transaction_number),
+      amount: amount(seed, transaction_number),
       date: Date.to_iso8601(date),
       description: description,
       details: details,
       links: %{
-        self: "localhost:4000/api/accounts/" <> account_id <> "/transactions" <> id,
+        self: "localhost:4000/api/accounts/" <> account_id <> "/transactions/" <> id,
         account: "localhost:4000/api/accounts/" <> account_id
       },
       status: status
     }
   end
 
-  def generate_for_range(range, account_name, account_id, timestamp) do
-    Enum.flat_map(range, fn date ->
-      transaction_count = count_for_day(account_name, timestamp, date)
+  def generate_for_range(range, account_id) do
+    # Generate transactions
+    transactions =
+      Enum.flat_map(range, fn date ->
+        transaction_count = count_for_day(account_id, date)
 
-      Enum.to_list(1..transaction_count)
-      |> Enum.map(fn transaction_number ->
-        generate(account_id, timestamp, date, transaction_number)
+        Enum.to_list(1..transaction_count)
+        |> Enum.map(fn transaction_number ->
+          generate(account_id, date, transaction_number)
+        end)
       end)
-    end)
-  end
+      |> Enum.with_index(fn transaction, index -> {index, transaction} end)
 
-  def generate_balances(transaction_list, account_name, timestamp) do
-    Enum.map_reduce(transaction_list, 0, fn {index, transaction}, acc ->
-      acc =
-        if index == 0,
-          do:
-            (Account.starting_balance(account_name, timestamp) * 100 + transaction.amount * 100) /
-              100,
-          else: (acc * 100 + transaction.amount * 100) / 100
+    # Calculate the balances
+    {transactions_with_balances, _} =
+      Enum.map_reduce(transactions, 0, fn {index, transaction}, acc ->
+        acc =
+          if index == 0,
+            do:
+              (Account.starting_balance(account_id) * 100 + transaction.amount * 100) /
+                100,
+            else: (acc * 100 + transaction.amount * 100) / 100
 
-      {Map.put(transaction, :running_balance, acc), acc}
-    end)
+        acc = Float.round(acc, 2)
+
+        {Map.put(transaction, :running_balance, acc), acc}
+      end)
+
+    # Return the list!
+    transactions_with_balances
   end
 
   def id(account_id, date, transaction_number) do
     string =
-      (Date.day_of_week(date) + Date.day_of_year(date) + date.day +
-         date.month * transaction_number)
+      (Date.day_of_week(date) * date.day * transaction_number + date.month)
       |> Integer.to_string()
 
-    seed = account_id <> string
+    combined_string = account_id <> string
 
-    id = UUID.uuid5(:oid, seed, :slug)
-
+    id = UUID.uuid5(:oid, combined_string, :slug)
     "txn_" <> id
   end
 
-  def amount(account_name, timestamp, date, transaction_number) do
-    # Determine size of the transaction
-    account_name_number = Variance.number_from_account_name(account_name)
-    {ms, _} = timestamp.microsecond
+  def amount(seed, transaction_number) do
+    # Get seeds
+    {size_seed, amount_seed} = Variance.split_seed(seed, transaction_number + 5)
 
-    # Give extra weight to the day and transaction number by multiplying everything by them
-    size_num =
-      (date.month +
-         account_name_number + ms + timestamp.second +
-         timestamp.minute + timestamp.day) * date.day * Date.day_of_week(date) *
-        transaction_number
-
-    # For verisimilitude's sake:
-    # transactions that have 5 digits (i.e. that are in the hundred's) should be rare
-    # transactions that have 3 digits (i.e. that cost less than 10) should be somewhat infrequent
-    # transactions that have 4 digits (i.e. that are in the 10s) should be most common
-    # N.B. This works well for USD and GBP and other strong currencies.
-    # More inflated currencies shoudl probably have different weights. That's a problem for another time.
-
+    # Determine size of the transaction. For verisimilitude's sake:
+    # 5 digits (i.e. in the 100s) are rare
+    # 4 digit (i.e. in the 10s) are common
+    # 3 digit (i.e. less than 10) are less common, but still frequent
+    # N.B. This works well for USD, GBP, and other strong currencies.
+    # More inflated currencies should probably have different weights. That's a problem for another time.
     sig_digits =
       cond do
-        rem(size_num, 20) == 0 -> 5
-        rem(size_num, 5) == 0 -> 3
+        rem(size_seed, 5) == 0 -> 5
+        rem(size_seed, 3) == 0 -> 3
         true -> 4
       end
 
-    # Create large integer
-    size_num = size_num * account_name_number * transaction_number * ms * timestamp.day
+    # Take the amount_seed, and starting with the second digit,
+    # reverse the digits in chunks of x, where x is the number of digits
+    # Then take the correct number of digits from the front of the resulting list
+    {digits, _} =
+      amount_seed
+      |> Integer.digits()
+      |> Enum.reverse_slice(1, sig_digits)
+      |> Enum.split(sig_digits)
 
-    # Pick the correct number of digits
-    # from the front of the large integer
-    {digits, _} = size_num |> Integer.digits() |> Enum.split(sig_digits)
+    # Take the resulting list of digits and turn them into a Float with two decimal places
     int = Integer.undigits(digits)
 
-    # Create the float
     -(int / 100)
   end
 
-  def description_and_details(account_name, timestamp, date, transaction_number) do
-    account_name_number = Variance.number_from_account_name(account_name)
-    {ms, _} = timestamp.microsecond
+  def description_and_details(seed, transaction_number) do
+    {num_1, num_2} = Variance.split_seed(seed, transaction_number)
 
-    account_and_timestamp_num =
-      ms + timestamp.second +
-        timestamp.minute + timestamp.day * account_name_number
-
-    # Give extra weight to the date and the transaction_number by multiplying everything by them
-    date_and_transaction_num =
-      (date.month +
-         account_name_number) * transaction_number * date.day * Date.day_of_week(date)
-
-    merchant =
-      Variance.choose_from_list(date_and_transaction_num, account_and_timestamp_num, merchants(),
-        op: :add
-      )
+    merchant = Variance.choose_from_list(num_1, num_2, merchants(), op: :add)
 
     {merchant.name,
      %{
@@ -242,21 +228,17 @@ defmodule Teller.Accounts.Transaction do
      }}
   end
 
-  def count_for_day(account_name, timestamp, date) do
-    account_name_number = Variance.number_from_account_name(account_name)
-    {ms, _} = timestamp.microsecond
+  def count_for_day(account_id, date) do
+    # Get a seed number from the account_id and the date
+    string = account_id <> Date.to_iso8601(date)
+    seed = UUID.uuid5(:oid, string, :slug) |> Variance.id_to_number()
 
-    account_and_timestamp_num =
-      ms + timestamp.second +
-        timestamp.minute + timestamp.day * account_name_number
-
-    date_and_transaction_num =
-      (date.month +
-         account_name_number) * Date.day_of_week(date) * Date.day_of_year(date) * date.day
+    # Get two three digit numbers by pulling digits out of the seed
+    {num_1, num_2} = Variance.split_seed(seed, 3)
 
     Variance.choose_from_list(
-      date_and_transaction_num,
-      account_and_timestamp_num,
+      num_1,
+      num_2,
       [0, 1, 2, 3, 4, 5],
       op: :add
     )

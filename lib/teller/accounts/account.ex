@@ -87,7 +87,6 @@ defmodule Teller.Accounts.Account do
 
     num =
       (ms + account_name_number + String.length(account_name))
-      |> IO.inspect()
       |> Integer.digits()
       |> List.last()
 
@@ -165,19 +164,12 @@ defmodule Teller.Accounts.Account do
     end)
   end
 
-  def starting_balance(account_name, timestamp) do
-    account_name_number = Variance.number_from_account_name(account_name)
-    IO.inspect(account_name_number)
-    {ms, _} = timestamp.microsecond
-    {seed, _} = ms |> Integer.digits() |> Enum.split(4)
-    seed = seed |> Integer.undigits()
-    seed = if seed == 0, do: 5555, else: seed
-    second = if timestamp.second == 0, do: 59, else: timestamp.second
+  def starting_balance(account_id) do
+    {balance, _} =
+      account_id
+      |> Variance.id_to_number()
+      |> Variance.split_seed(7)
 
-    balance =
-      (timestamp.month + timestamp.day + timestamp.minute + String.length(account_name)) * seed *
-        second / account_name_number
-
-    Float.round(balance, 2)
+    Float.round(balance / 100, 2)
   end
 end
