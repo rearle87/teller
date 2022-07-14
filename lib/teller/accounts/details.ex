@@ -17,11 +17,11 @@ defmodule Teller.Accounts.Details do
           }
         }
 
-  alias Teller.Accounts.{Account, Variance}
+  alias Teller.Accounts.Variance
 
-  def generate(account_name, timestamp) do
-    {account_id, _} = Account.ids(account_name, timestamp)
-    {account_number, routing_numbers} = account_and_routing(account_name, timestamp)
+  def generate(account_id) do
+    seed = Variance.id_to_number(account_id)
+    {account_number, routing_numbers} = account_and_routing(seed)
 
     %__MODULE__{
       account_id: account_id,
@@ -34,40 +34,28 @@ defmodule Teller.Accounts.Details do
     }
   end
 
-  def account_and_routing(account_name, timestamp) do
-    {ms, _} = timestamp.microsecond
+  def account_and_routing(seed) do
+    # Take the account_id seed and split it into 3 smaller numbers
+    {account_seed, ach_and_wire_seed} = Variance.split_seed(seed, 11)
+    {ach_seed, wire_seed} = Variance.split_seed(ach_and_wire_seed, 9)
 
-    ms = if ms == 0, do: 9999, else: ms
-    sec = if timestamp.second == 0, do: 59, else: timestamp.second
-    min = if timestamp.minute == 0, do: 45, else: timestamp.minute
-    hour = if timestamp.hour == 0, do: 21, else: timestamp.hour
-    day = if timestamp.day == 0, do: 23, else: timestamp.day
-    month = if timestamp.month == 0, do: 11, else: timestamp.month
+    # Use those three smaller numbers to create account and routing numbers out of new UUIDs
+    # This way, the account_num, ach_num, and wire_num aren't at risk of looking like the last_4
+    account_num = create_number(account_seed, 11)
+    ach_num = create_number(ach_seed, 9)
+    wire_num = create_number(wire_seed, 9)
 
-    account_name_num =
-      Variance.number_from_account_name(account_name, word_op: :mult, comb_op: :mult)
+    # Return the correct numbers
+    {account_num, %{ach: ach_num, wire: wire_num}}
+  end
 
-    # Account Number
-    {account_digits, _} =
-      (account_name_num * ms * sec * month) |> Integer.digits() |> Enum.split(11)
+  defp create_number(seed, digits) do
+    # Take the seed, turn it into a new UUID,
+    # Turn that UUID back into another number,
+    # and chop that new number to the appropriate number of digits
+    id = UUID.uuid5(:oid, Integer.to_string(seed), :slug)
+    {num, _} = ("num_" <> id) |> Variance.id_to_number() |> Variance.split_seed(digits)
 
-    account_number = Integer.undigits(account_digits)
-
-    # ACH Routing Number
-    {ach_digits, _} =
-      (account_name_num * month * day * min * 13) |> Integer.digits() |> Enum.split(9)
-
-    ach_number = Integer.undigits(ach_digits)
-
-    # Wire Routing Number
-    {wire_digits, _} =
-      (account_name_num * hour * month * day * ms)
-      |> Integer.digits()
-      |> Enum.split(9)
-
-    wire_number = Integer.undigits(wire_digits)
-
-    # Return a tuple of the account number and routing numbers
-    {account_number, %{ach: ach_number, wire: wire_number}}
+    num
   end
 end

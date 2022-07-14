@@ -138,28 +138,26 @@ defmodule Teller.Accounts.Transaction do
     }
   end
 
-  def generate_for_range(range, account_id) do
+  def generate_for_range(account_id, range) do
     # Generate transactions
-    transactions =
-      Enum.flat_map(range, fn date ->
+    {transactions, _} =
+      range
+      |> Enum.flat_map(fn date ->
         transaction_count = count_for_day(account_id, date)
+        list = if transaction_count == 0, do: [], else: Enum.to_list(1..transaction_count)
 
-        Enum.to_list(1..transaction_count)
-        |> Enum.map(fn transaction_number ->
+        Enum.map(list, fn transaction_number ->
           generate(account_id, date, transaction_number)
         end)
       end)
       |> Enum.with_index(fn transaction, index -> {index, transaction} end)
 
-    # Calculate the balances
-    {transactions_with_balances, _} =
-      Enum.map_reduce(transactions, 0, fn {index, transaction}, acc ->
+      # Calculate the balances
+      |> Enum.map_reduce(0, fn {index, transaction}, acc ->
         acc =
           if index == 0,
-            do:
-              (Account.starting_balance(account_id) * 100 + transaction.amount * 100) /
-                100,
-            else: (acc * 100 + transaction.amount * 100) / 100
+            do: Account.starting_balance(account_id) + transaction.amount,
+            else: acc + transaction.amount
 
         acc = Float.round(acc, 2)
 
@@ -167,7 +165,7 @@ defmodule Teller.Accounts.Transaction do
       end)
 
     # Return the list!
-    transactions_with_balances
+    transactions
   end
 
   def id(account_id, date, transaction_number) do

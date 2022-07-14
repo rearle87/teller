@@ -60,13 +60,14 @@ defmodule Teller.Accounts.Account do
 
   def generate(account_name, timestamp) do
     {account_id, enrollment_id} = ids(account_name, timestamp)
-    {type, subtype} = type_and_subtype(account_name, timestamp)
+    seed = Variance.id_to_number(account_id)
+    {type, subtype} = type_and_subtype(seed, account_name)
 
     %__MODULE__{
       id: account_id,
       enrollment_id: enrollment_id,
-      institution: institution(account_name, timestamp),
-      last_four: last_4(account_name, timestamp),
+      institution: institution(seed),
+      last_four: last_four(seed),
       name: account_name,
       type: type,
       subtype: subtype,
@@ -79,31 +80,38 @@ defmodule Teller.Accounts.Account do
     }
   end
 
-  def type_and_subtype(account_name, timestamp) do
-    {ms, _} = timestamp.microsecond
+  def ids(account_name, timestamp) do
+    string = account_name <> DateTime.to_iso8601(timestamp)
 
-    account_name_number =
-      Variance.number_from_account_name(account_name, word_op: :add, comb_op: :add)
+    account_id = UUID.uuid5(:dns, string, :slug)
+    enrollment_id = UUID.uuid5(:oid, string, :slug)
 
-    num =
-      (ms + account_name_number + String.length(account_name))
-      |> Integer.digits()
-      |> List.last()
+    {"acc_" <> account_id, "enr_" <> enrollment_id}
+  end
 
+  def type_and_subtype(seed, account_name) do
+    {num, _} = Variance.split_seed(seed, 6)
+
+    # Determine the type of account. For verisimilitude's sake:
+    # "My Checking" should always be "checking"
+    # "Treastury" and "Sweep" should be very rare
+    # "CDs" and "Money Markets" should be rare
+    # "Savings" should be uncommon
+    # "Checking" and "Credit Card" should be equally likely
     cond do
       account_name == "My Checking" ->
         {"depository", "checking"}
 
-      rem(num, 25) == 0 ->
+      rem(num, 50) == 0 ->
         {"depository", "sweep"}
 
-      rem(num, 10) == 0 ->
+      rem(num, 25) == 0 ->
         {"depository", "treasury"}
 
-      rem(num, 8) == 0 ->
+      rem(num, 10) == 0 ->
         {"depository", "certificate_of_deposit"}
 
-      rem(num, 4) == 0 ->
+      rem(num, 5) == 0 ->
         {"depository", "money_market"}
 
       rem(num, 3) == 0 ->
@@ -117,41 +125,20 @@ defmodule Teller.Accounts.Account do
     end
   end
 
-  def last_4(account_name, timestamp) do
-    {ms, _} = timestamp.microsecond
+  def last_four(seed) do
+    {_, num} = Variance.split_seed(seed, 6)
 
     {digits, _} =
-      (ms * Variance.number_from_account_name(account_name, word_op: :add, comb_op: :add))
+      num
       |> Integer.digits()
       |> Enum.split(4)
 
     Integer.undigits(digits)
   end
 
-  def ids(account_name, timestamp) do
-    iso = DateTime.to_iso8601(timestamp)
-
-    name_string =
-      Variance.number_from_account_name(account_name, word_op: :add, comb_op: :add)
-      |> Integer.to_string()
-
-    seed = iso <> name_string
-
-    account_id = UUID.uuid5(:dns, seed, :slug)
-    enrollment_id = UUID.uuid5(:oid, seed, :slug)
-
-    {"acc_" <> account_id, "enr_" <> enrollment_id}
-  end
-
-  def institution(account_name, timestamp) do
-    # Get miliseconds from timestamp
-    {ms, _} = timestamp.microsecond
-
-    # Get sum of alphabet letters from account name
-    account_name_number =
-      Variance.number_from_account_name(account_name, word_op: :add, comb_op: :add)
-
-    name = Variance.choose_from_list(ms, account_name_number, institutions(), op: :add)
+  def institution(seed) do
+    {num_1, num_2} = Variance.split_seed(seed, 2)
+    name = Variance.choose_from_list(num_1, num_2, institutions(), op: :add)
 
     %{id: String.downcase(name), name: name}
   end

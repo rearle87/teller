@@ -63,7 +63,7 @@ defmodule Teller.Accounts do
     range = Date.range(start_date, end_date)
 
     # Create the transactions
-    Transaction.generate_for_range(range, account_id)
+    Transaction.generate_for_range(account_id, range)
   end
 
   @doc """
