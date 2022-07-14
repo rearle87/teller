@@ -115,18 +115,19 @@ defmodule Teller.Accounts.Transaction do
 
   def generate(account_id, timestamp, date, transaction_number) do
     account_name = Account.get_name_from_id(account_id, timestamp)
-    {description, details} = description_and_details(account_name, date, transaction_number)
+
+    {description, details} =
+      description_and_details(account_name, timestamp, date, transaction_number)
 
     id = id(account_id, date, transaction_number)
     status = if Date.diff(Date.utc_today(), date) < 2, do: "pending", else: "posted"
 
-    Date.diff(date, Date.utc_today()) |> IO.inspect()
-    IO.inspect(status)
+    Date.diff(date, Date.utc_today())
 
     %__MODULE__{
       account_id: account_id,
       id: id,
-      amount: amount(account_name, date, transaction_number),
+      amount: amount(account_name, timestamp, date, transaction_number),
       date: Date.to_iso8601(date),
       description: description,
       details: details,
@@ -136,6 +137,30 @@ defmodule Teller.Accounts.Transaction do
       },
       status: status
     }
+  end
+
+  def generate_for_range(range, account_name, account_id, timestamp) do
+    Enum.flat_map(range, fn date ->
+      transaction_count = count_for_day(account_name, timestamp, date)
+
+      Enum.to_list(1..transaction_count)
+      |> Enum.map(fn transaction_number ->
+        generate(account_id, timestamp, date, transaction_number)
+      end)
+    end)
+  end
+
+  def generate_balances(transaction_list, account_name, timestamp) do
+    Enum.map_reduce(transaction_list, 0, fn {index, transaction}, acc ->
+      acc =
+        if index == 0,
+          do:
+            (Account.starting_balance(account_name, timestamp) * 100 + transaction.amount * 100) /
+              100,
+          else: (acc * 100 + transaction.amount * 100) / 100
+
+      {Map.put(transaction, :running_balance, acc), acc}
+    end)
   end
 
   def id(account_id, date, transaction_number) do
@@ -151,23 +176,34 @@ defmodule Teller.Accounts.Transaction do
     "txn_" <> id
   end
 
-  def amount(account_name, date, transaction_number) do
+  def amount(account_name, timestamp, date, transaction_number) do
     # Determine size of the transaction
     account_name_number = Variance.number_from_account_name(account_name)
+    {ms, _} = timestamp.microsecond
 
+    # Give extra weight to the day and transaction number by multiplying everything by them
     size_num =
-      Date.day_of_week(date) + Date.day_of_year(date) + date.day + date.month +
-        account_name_number + transaction_number
+      (date.month +
+         account_name_number + ms + timestamp.second +
+         timestamp.minute + timestamp.day) * date.day * Date.day_of_week(date) *
+        transaction_number
+
+    # For verisimilitude's sake:
+    # transactions that have 5 digits (i.e. that are in the hundred's) should be rare
+    # transactions that have 3 digits (i.e. that cost less than 10) should be somewhat infrequent
+    # transactions that have 4 digits (i.e. that are in the 10s) should be most common
+    # N.B. This works well for USD and GBP and other strong currencies.
+    # More inflated currencies shoudl probably have different weights. That's a problem for another time.
 
     sig_digits =
       cond do
-        rem(size_num, 5) == 0 -> 5
-        rem(size_num, 2) == 0 -> 4
-        true -> 3
+        rem(size_num, 20) == 0 -> 5
+        rem(size_num, 5) == 0 -> 3
+        true -> 4
       end
 
     # Create large integer
-    size_num = size_num * account_name_number * transaction_number
+    size_num = size_num * account_name_number * transaction_number * ms * timestamp.day
 
     # Pick the correct number of digits
     # from the front of the large integer
@@ -178,16 +214,22 @@ defmodule Teller.Accounts.Transaction do
     -(int / 100)
   end
 
-  def description_and_details(account_name, date, transaction_number) do
+  def description_and_details(account_name, timestamp, date, transaction_number) do
     account_name_number = Variance.number_from_account_name(account_name)
+    {ms, _} = timestamp.microsecond
 
+    account_and_timestamp_num =
+      ms + timestamp.second +
+        timestamp.minute + timestamp.day * account_name_number
+
+    # Give extra weight to the date and the transaction_number by multiplying everything by them
     date_and_transaction_num =
-      (Date.day_of_week(date) + Date.day_of_year(date) + date.day + date.month +
-         account_name_number) * transaction_number
+      (date.month +
+         account_name_number) * transaction_number * date.day * Date.day_of_week(date)
 
     merchant =
-      Variance.choose_from_list(date_and_transaction_num, account_name_number, merchants(),
-        op: :mult
+      Variance.choose_from_list(date_and_transaction_num, account_and_timestamp_num, merchants(),
+        op: :add
       )
 
     {merchant.name,
@@ -198,5 +240,25 @@ defmodule Teller.Accounts.Transaction do
          type: "organization"
        }
      }}
+  end
+
+  def count_for_day(account_name, timestamp, date) do
+    account_name_number = Variance.number_from_account_name(account_name)
+    {ms, _} = timestamp.microsecond
+
+    account_and_timestamp_num =
+      ms + timestamp.second +
+        timestamp.minute + timestamp.day * account_name_number
+
+    date_and_transaction_num =
+      (date.month +
+         account_name_number) * Date.day_of_week(date) * Date.day_of_year(date) * date.day
+
+    Variance.choose_from_list(
+      date_and_transaction_num,
+      account_and_timestamp_num,
+      [0, 1, 2, 3, 4, 5],
+      op: :add
+    )
   end
 end

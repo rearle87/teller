@@ -55,6 +55,8 @@ defmodule Teller.Accounts.Variance do
       end
 
     list_index = rem(new_number, length(list)) - 1
+
     Enum.at(list, list_index)
+    |> IO.inspect()
   end
 end

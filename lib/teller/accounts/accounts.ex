@@ -47,7 +47,8 @@ defmodule Teller.Accounts do
   alias Teller.Accounts.Transaction
 
   @doc """
-  Returns the list of transactions.
+  Returns a list of transactions for a given account_id and API key timestamp
+  Only returns transactions going back 90 days
 
   ## Examples
 
@@ -55,8 +56,26 @@ defmodule Teller.Accounts do
       [%Transaction{}, ...]
 
   """
-  def list_transactions(account_id) do
-    raise "TODO"
+  def list_transactions(account_id, timestamp) do
+    # Get variables
+    account_name = Account.get_name_from_id(account_id, timestamp)
+
+    # Generate a list of dates 90 days in the past from the day the timestamp was created
+    start_date = DateTime.to_date(timestamp) |> Date.add(-90)
+    end_date = Date.utc_today()
+    range = Date.range(start_date, end_date)
+
+    # Create the transactions
+    transactions =
+      range
+      |> Transaction.generate_for_range(account_name, account_id, timestamp)
+      |> Enum.with_index(fn transaction, index -> {index, transaction} end)
+
+    # Figure out the balances
+    {transactions_with_balances, _} =
+      Transaction.generate_balances(transactions, account_name, timestamp)
+
+    transactions_with_balances
   end
 
   @doc """
