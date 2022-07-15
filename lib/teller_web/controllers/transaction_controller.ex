@@ -15,12 +15,12 @@ defmodule TellerWeb.TransactionController do
            Accounts.list_transactions(account_id, conn.assigns.token_timestamp, opts) do
       conn
       |> put_status(:accepted)
-      |> json(transactions)
+      |> json(%{"data" => transactions})
     else
       {_, error} ->
         conn
         |> put_status(:not_found)
-        |> json(error: error)
+        |> json(%{"error" => error})
     end
   end
 
@@ -29,12 +29,12 @@ defmodule TellerWeb.TransactionController do
            Accounts.get_transaction(account_id, transaction_id, conn.assigns.token_timestamp) do
       conn
       |> put_status(:accepted)
-      |> json(transaction)
+      |> json(%{"data" => transaction})
     else
       {_, error} ->
         conn
         |> put_status(:not_found)
-        |> json(error: error)
+        |> json(%{"error" => error})
     end
   end
 end

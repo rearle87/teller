@@ -1,18 +1,18 @@
 defmodule TellerWeb.AccountControllerTest do
   use TellerWeb.ConnCase
 
-  import Teller.AccountsFixtures
+  # import Teller.AccountsFixtures
 
-  @timestamp DateTime.from_iso8601("2022-07-15T18:08:06.088293Z")
-  @account_1 %{id: "acc_9hve8a3eXgKl1XLjlNipPQ"}
-  @account_2 %{id: "acc_PsQ0x-3VX4KXSmHLjaqpbw"}
+  # @timestamp DateTime.from_iso8601("2022-07-15T18:08:06.088293Z")
+  # @account_1 %{id: "acc_9hve8a3eXgKl1XLjlNipPQ"}
+  # @account_2 %{id: "acc_PsQ0x-3VX4KXSmHLjaqpbw"}
 
-  describe "index" do
-    test "lists all accounts", %{conn: conn} do
-      conn = get(conn, Routes.account_path(conn, :index))
-      assert html_response(conn, 200) =~ "Listing Accounts"
-    end
-  end
+  # describe "index" do
+  #   test "lists all accounts", %{conn: conn} do
+  #     conn = get(conn, Routes.account_path(conn, :index))
+  #     assert html_response(conn, 200) =~ "Listing Accounts"
+  #   end
+  # end
 
   # describe "create account" do
   #   test "redirects to show when data is valid", %{conn: conn} do

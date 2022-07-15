@@ -7,12 +7,12 @@ defmodule TellerWeb.AccountController do
     with {:ok, accounts} <- Accounts.list_accounts(conn.assigns.token_timestamp) do
       conn
       |> put_status(:accepted)
-      |> json(accounts)
+      |> json(%{"data" => accounts})
     else
       {_, error} ->
         conn
         |> put_status(:not_found)
-        |> json(error: error)
+        |> json(%{"error" => error})
     end
   end
 
@@ -20,12 +20,12 @@ defmodule TellerWeb.AccountController do
     with {:ok, account} <- Accounts.get_account(account_id, conn.assigns.token_timestamp) do
       conn
       |> put_status(:accepted)
-      |> json(account)
+      |> json(%{"data" => account})
     else
       {_, error} ->
         conn
         |> put_status(:not_found)
-        |> json(error: error)
+        |> json(%{"error" => error})
     end
   end
 
@@ -33,12 +33,12 @@ defmodule TellerWeb.AccountController do
     with {:ok, details} <- Accounts.get_details(account_id) do
       conn
       |> put_status(:accepted)
-      |> json(details)
+      |> json(%{"data" => details})
     else
       {_, error} ->
         conn
         |> put_status(:not_found)
-        |> json(error: error)
+        |> json(%{"error" => error})
     end
   end
 
@@ -46,12 +46,12 @@ defmodule TellerWeb.AccountController do
     with {:ok, balance} <- Accounts.get_balance(account_id, conn.assigns.token_timestamp) do
       conn
       |> put_status(:accepted)
-      |> json(balance)
+      |> json(%{"data" => balance})
     else
       {_, error} ->
         conn
         |> put_status(:not_found)
-        |> json(error: error)
+        |> json(%{"error" => error})
     end
   end
 end
