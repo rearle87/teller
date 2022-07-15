@@ -62,39 +62,25 @@ defmodule Teller.Accounts.Transaction do
     }
   end
 
-  def generate_for_range(account_id, range, opts \\ []) do
+  def generate_for_range(account_id, %Date.Range{} = range, opts \\ []) do
     {transactions, _} =
       range
-
-      # Generate transactions
-      |> Enum.flat_map(fn date ->
-        transaction_count = count_for_day(account_id, date)
-        list = if transaction_count == 0, do: [], else: Enum.to_list(1..transaction_count)
-
-        Enum.map(list, fn transaction_number ->
-          generate(account_id, date, transaction_number)
-        end)
-      end)
-      |> Enum.with_index(fn transaction, index -> {index, transaction} end)
-
-      # Calculate the balances
-      |> Enum.map_reduce(0, fn {index, transaction}, acc ->
-        acc =
-          if index == 0,
-            do: Account.starting_balance(account_id) + transaction.amount,
-            else: acc + transaction.amount
-
-        acc = Float.round(acc, 2)
-
-        {Map.put(transaction, :running_balance, acc), acc}
-      end)
+      |> generate_transactions(account_id)
+      |> calculate_balances(account_id)
 
     # Pagination Controls
     from_id = Keyword.get(opts, :from_id)
     transactions = if from_id, do: start_list_at(transactions, from_id), else: transactions
 
     count = Keyword.get(opts, :count)
-    if count, do: paginate(transactions, count), else: transactions
+    transactions = if count, do: paginate(transactions, count), else: transactions
+    {:ok, transactions}
+  end
+
+  def generate_for_range(_), do: {:error, "Range is not a valid list of dates"}
+
+  def is_valid_id(transaction_id) do
+    is_binary(transaction_id) && String.starts_with?(transaction_id, "txn_")
   end
 
   # =============================================================
@@ -253,7 +239,34 @@ defmodule Teller.Accounts.Transaction do
   #  ---------- PRIVATE FUNCTIONS - TRANSACTION LIST ----------
   # ===========================================================
 
-  def start_list_at(transactions, from_id) do
+  defp generate_transactions(range, account_id) do
+    range
+    |> Enum.flat_map(fn date ->
+      transaction_count = count_for_day(account_id, date)
+      list = if transaction_count == 0, do: [], else: Enum.to_list(1..transaction_count)
+
+      Enum.map(list, fn transaction_number ->
+        generate(account_id, date, transaction_number)
+      end)
+    end)
+    |> Enum.with_index(fn transaction, index -> {index, transaction} end)
+  end
+
+  defp calculate_balances(transactions_with_indeces, account_id) do
+    transactions_with_indeces
+    |> Enum.map_reduce(0, fn {index, transaction}, acc ->
+      acc =
+        if index == 0,
+          do: Account.starting_balance(account_id) + transaction.amount,
+          else: acc + transaction.amount
+
+      acc = Float.round(acc, 2)
+
+      {Map.put(transaction, :running_balance, acc), acc}
+    end)
+  end
+
+  defp start_list_at(transactions, from_id) do
     starting_index =
       Enum.find_index(transactions, fn transaction ->
         transaction.id == from_id
@@ -267,9 +280,9 @@ defmodule Teller.Accounts.Transaction do
     new_transactions
   end
 
-  def paginate(transactions, count) do
+  defp paginate(transactions, count) do
     {transactions, _} = Enum.split(transactions, count)
-    Enum.split(transactions, count) |> IO.inspect()
+    Enum.split(transactions, count)
     transactions
   end
 end

@@ -33,29 +33,34 @@ defmodule Teller.Accounts.Account do
 
   alias Teller.Accounts.Variance
 
-  def generate(account_name, timestamp) do
+  def generate(account_name, %DateTime{} = timestamp) when is_binary(account_name) do
     {account_id, enrollment_id} = ids(account_name, timestamp)
     seed = Variance.id_to_number(account_id)
     {type, subtype} = type_and_subtype(seed, account_name)
 
-    %__MODULE__{
-      id: account_id,
-      enrollment_id: enrollment_id,
-      institution: institution(seed),
-      last_four: last_four(seed),
-      name: account_name,
-      type: type,
-      subtype: subtype,
-      links: %{
-        balances: "localhost:4000/api/accounts/" <> account_id <> "/balances",
-        details: "localhost:4000/api/accounts/" <> account_id <> "/details",
-        self: "localhost:4000/api/accounts/" <> account_id,
-        transactions: "localhost:4000/api/accounts/" <> account_id <> "/transactions"
-      }
-    }
+    {:ok,
+     %__MODULE__{
+       id: account_id,
+       enrollment_id: enrollment_id,
+       institution: institution(seed),
+       last_four: last_four(seed),
+       name: account_name,
+       type: type,
+       subtype: subtype,
+       links: %{
+         balances: "localhost:4000/api/accounts/" <> account_id <> "/balances",
+         details: "localhost:4000/api/accounts/" <> account_id <> "/details",
+         self: "localhost:4000/api/accounts/" <> account_id,
+         transactions: "localhost:4000/api/accounts/" <> account_id <> "/transactions"
+       }
+     }}
   end
 
-  def generate_all(timestamp) do
+  def generate(),
+    do:
+      {:error, "First argument must be a string and second argument must be a %DateTime{} struct"}
+
+  def generate_all(%DateTime{} = timestamp) do
     names = [
       "My Checking",
       "Jimmy Carter",
@@ -67,8 +72,16 @@ defmodule Teller.Accounts.Account do
       "Donald Trump"
     ]
 
-    Enum.map(names, fn name -> generate(name, timestamp) end)
+    accounts =
+      names
+      |> Enum.map(fn name -> generate(name, timestamp) end)
+      |> Enum.map(fn {_, account} -> account end)
+
+    {:ok, accounts}
   end
+
+  def generate_all(_),
+    do: {:error, "This function only accepts %DateTime{} structs as an argument"}
 
   def starting_balance(account_id) do
     {balance, _} =
@@ -79,12 +92,15 @@ defmodule Teller.Accounts.Account do
     Float.round(balance / 100, 2)
   end
 
+  def is_valid_id(account_id) do
+    is_binary(account_id) && String.starts_with?(account_id, "acc_")
+  end
+
   # ========================================
   #  ---------- PRIVATE FUNCTIONS ----------
   # ========================================
 
   defp ids(account_name, timestamp) do
-    IO.inspect(timestamp)
     string = account_name <> DateTime.to_iso8601(timestamp)
 
     account_id = UUID.uuid5(:dns, string, :slug)

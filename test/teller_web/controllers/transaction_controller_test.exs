@@ -7,12 +7,12 @@ defmodule TellerWeb.TransactionControllerTest do
   @update_attrs %{}
   @invalid_attrs %{}
 
-  describe "index" do
-    test "lists all transactions", %{conn: conn} do
-      conn = get(conn, Routes.transaction_path(conn, :index))
-      assert html_response(conn, 200) =~ "Listing Transactions"
-    end
-  end
+  # describe "index" do
+  #   test "lists all transactions", %{conn: conn} do
+  #     conn = get(conn, Routes.transaction_path(conn, :index))
+  #     assert html_response(conn, 200) =~ "Listing Transactions"
+  #   end
+  # end
 
   # describe "new transaction" do
   #   test "renders form", %{conn: conn} do

@@ -11,19 +11,30 @@ defmodule TellerWeb.TransactionController do
     opts = if from_id, do: [from_id: from_id], else: []
     opts = if count, do: opts ++ [count: String.to_integer(count)], else: opts
 
-    transactions = Accounts.list_transactions(account_id, conn.assigns.token_timestamp, opts)
-
-    conn
-    |> put_status(:accepted)
-    |> json(transactions)
+    with {:ok, transactions} <-
+           Accounts.list_transactions(account_id, conn.assigns.token_timestamp, opts) do
+      conn
+      |> put_status(:accepted)
+      |> json(transactions)
+    else
+      {_, error} ->
+        conn
+        |> put_status(:not_found)
+        |> json(error: error)
+    end
   end
 
   def show(conn, %{"account_id" => account_id, "transaction_id" => transaction_id}) do
-    transaction =
-      Accounts.get_transaction!(account_id, transaction_id, conn.assigns.token_timestamp)
-
-    conn
-    |> put_status(:accepted)
-    |> json(transaction)
+    with {:ok, transaction} <-
+           Accounts.get_transaction(account_id, transaction_id, conn.assigns.token_timestamp) do
+      conn
+      |> put_status(:accepted)
+      |> json(transaction)
+    else
+      {_, error} ->
+        conn
+        |> put_status(:not_found)
+        |> json(error: error)
+    end
   end
 end

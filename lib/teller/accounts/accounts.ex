@@ -15,11 +15,16 @@ defmodule Teller.Accounts do
   ## Examples
 
       iex> list_accounts(~U[2022-07-13 21:56:08.707934Z])
-      [%Account{}, ...]
+      {:ok, [%Account{}, ...]}
 
   """
   def list_accounts(timestamp) do
-    {:ok, Account.generate_all(timestamp)}
+    result = Account.generate_all(timestamp)
+
+    case result do
+      {:ok, _} -> result
+      {:error, message} -> message
+    end
   end
 
   @doc """
@@ -30,12 +35,24 @@ defmodule Teller.Accounts do
   ## Examples
 
       iex> get_account!("acc_123", ~U[2022-07-13 21:56:08.707934Z])
-      %Account{}
+      {:ok, %Account{}}
 
   """
-  def get_account!(account_id, timestamp) do
-    Account.generate_all(timestamp)
-    |> Enum.find(fn account -> account.id == account_id end)
+  def get_account(account_id, timestamp) do
+    result = Account.generate_all(timestamp)
+
+    case result do
+      {:ok, accounts} ->
+        account = Enum.find(accounts, fn account -> account.id == account_id end)
+
+        case account do
+          %Account{} -> {:ok, account}
+          _ -> {:error, "Account does not exist"}
+        end
+
+      {:error, message} ->
+        message
+    end
   end
 
   @doc """
@@ -46,11 +63,15 @@ defmodule Teller.Accounts do
   ## Examples
 
       iex> get_details!("acc_123")
-      %Details{}
+      {:ok, %Details{}}
 
   """
-  def get_details!(account_id) do
-    Details.generate(account_id)
+  def get_details(account_id) do
+    if Account.is_valid_id(account_id) do
+      {:ok, Details.generate(account_id)}
+    else
+      {:error, "account_id must be a string that beings with acc_"}
+    end
   end
 
   @doc """
@@ -61,22 +82,23 @@ defmodule Teller.Accounts do
   ## Examples
 
       iex> get_balance!("acc_123", ~U[2022-07-13 21:56:08.707934Z])
-      %Balance{}
+      {:ok, %Balance{}}
 
   """
-  def get_balance!(account_id, timestamp) do
+  def get_balance(account_id, timestamp) do
     # Generate a list of dates 90 days in the past from the day the timestamp was created
     start_date = DateTime.to_date(timestamp) |> Date.add(-90)
     end_date = Date.utc_today()
     range = Date.range(start_date, end_date)
 
-    # Get the Transactions
-    transactions = Transaction.generate_for_range(account_id, range)
-
-    # Get the available and ledger balances
-    {ledger, available} = Balance.get_ledger_and_available(transactions)
-
-    Balance.generate(account_id, ledger, available)
+    with true <- Account.is_valid_id(account_id),
+         {:ok, transactions} <- Transaction.generate_for_range(account_id, range) do
+      # Get the available and ledger balances
+      {ledger, available} = Balance.get_ledger_and_available(transactions)
+      {:ok, Balance.generate(account_id, ledger, available)}
+    else
+      err -> err
+    end
   end
 
   # ===================================
@@ -90,7 +112,7 @@ defmodule Teller.Accounts do
   ## Examples
 
       iex> list_transactions("acc_123", ~U[2022-07-13 21:56:08.707934Z])
-      [%Transaction{}, ...]
+      {:ok, [%Transaction{}, ...]}
 
   """
   def list_transactions(account_id, timestamp, opts \\ []) do
@@ -100,7 +122,16 @@ defmodule Teller.Accounts do
     range = Date.range(start_date, end_date)
 
     # Create the transactions
-    Transaction.generate_for_range(account_id, range, opts)
+    if Account.is_valid_id(account_id) do
+      results = Transaction.generate_for_range(account_id, range, opts)
+
+      case results do
+        {:ok, _} -> results
+        {:error, _} -> results
+      end
+    else
+      {:error, "Account ID is not valid"}
+    end
   end
 
   @doc """
@@ -111,17 +142,29 @@ defmodule Teller.Accounts do
   ## Examples
 
       iex> get_transaction!("acc_123", "txn_456", ~U[2022-07-13 21:56:08.707934Z])
-      %Transaction{}
+      {:ok, %Transaction{}}
 
   """
-  def get_transaction!(account_id, transaction_id, timestamp) do
+  def get_transaction(account_id, transaction_id, timestamp) do
     # Generate a list of dates 90 days in the past from the day the timestamp was created
     start_date = DateTime.to_date(timestamp) |> Date.add(-90)
     end_date = Date.utc_today()
     range = Date.range(start_date, end_date)
 
     # Create the transactions and find the right one
-    Transaction.generate_for_range(account_id, range)
-    |> Enum.find(fn transaction -> transaction.id == transaction_id end)
+    with true <- Account.is_valid_id(account_id),
+         true <- Transaction.is_valid_id(transaction_id),
+         {:ok, transactions} <- Transaction.generate_for_range(account_id, range) do
+      result =
+        transactions
+        |> Enum.find(fn transaction -> transaction.id == transaction_id end)
+
+      case result do
+        %Transaction{} -> {:ok, result}
+        _ -> {:error, "transaction not found"}
+      end
+    else
+      err -> err
+    end
   end
 end

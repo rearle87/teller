@@ -3,9 +3,9 @@ defmodule TellerWeb.AccountControllerTest do
 
   import Teller.AccountsFixtures
 
-  @create_attrs %{}
-  @update_attrs %{}
-  @invalid_attrs %{}
+  @timestamp DateTime.from_iso8601("2022-07-15T18:08:06.088293Z")
+  @account_1 %{id: "acc_9hve8a3eXgKl1XLjlNipPQ"}
+  @account_2 %{id: "acc_PsQ0x-3VX4KXSmHLjaqpbw"}
 
   describe "index" do
     test "lists all accounts", %{conn: conn} do
